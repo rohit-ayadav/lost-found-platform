@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 interface Post {
@@ -16,7 +15,6 @@ interface Post {
 }
 
 export default function HomePage() {
-  const { isSignedIn } = useAuth();
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [coords, setCoords] = useState<[number, number] | null>(null);
@@ -65,20 +63,6 @@ export default function HomePage() {
     const lng = 80.9462; // Lucknow lng
     setCoords([lng, lat]);
   };
-
-  if (!isSignedIn) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <h1 className="text-2xl font-bold mb-4">Please Sign In</h1>
-        <button
-          className="bg-blue-500 text-white px-6 py-2 rounded"
-          onClick={() => router.push("/sign-in")}
-        >
-          Sign In
-        </button>
-      </div>
-    );
-  }
 
   if (locationDenied && !coords) {
     return (
