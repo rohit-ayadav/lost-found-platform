@@ -1,103 +1,147 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+
+interface Post {
+  _id: string;
+  type: "lost" | "found";
+  category: string;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  location: { name?: string; coordinates: [number, number] };
+  userId: string;
+}
+
+export default function HomePage() {
+  const { isSignedIn } = useAuth();
+  const router = useRouter();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [coords, setCoords] = useState<[number, number] | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [manualLocation, setManualLocation] = useState("");
+
+  // Request user location
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      setLocationDenied(true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords([position.coords.longitude, position.coords.latitude]);
+      },
+      () => {
+        setLocationDenied(true);
+      }
+    );
+  }, []);
+
+  // Fetch nearby posts
+  useEffect(() => {
+    if (!coords) return;
+    fetchPosts(coords[0], coords[1]);
+  }, [coords]);
+
+  const fetchPosts = async (lng: number, lat: number) => {
+    try {
+      const res = await fetch(`/api/posts?lng=${lng}&lat=${lat}&maxDistance=5000`);
+      const data = await res.json();
+      setPosts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Handle manual location input (example: city to lat/lng conversion)
+  const handleManualLocation = async () => {
+    if (!manualLocation) return;
+    // TODO: Call a geocoding API (Google Maps / OpenStreetMap) to get lat/lng
+    // For example purpose, we'll assume some coordinates
+    const lat = 26.8467; // Lucknow lat
+    const lng = 80.9462; // Lucknow lng
+    setCoords([lng, lat]);
+  };
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Please Sign In</h1>
+        <button
+          className="bg-blue-500 text-white px-6 py-2 rounded"
+          onClick={() => router.push("/sign-in")}
+        >
+          Sign In
+        </button>
+      </div>
+    );
+  }
+
+  if (locationDenied && !coords) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <p className="text-red-500 mb-4">Location access denied. Enter your city/pincode manually.</p>
+        <input
+          type="text"
+          placeholder="Enter your city/pincode"
+          className="border p-2 rounded mb-4 w-full max-w-sm"
+          value={manualLocation}
+          onChange={(e) => setManualLocation(e.target.value)}
         />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+        <button
+          className="bg-green-500 text-white px-4 py-2 rounded"
+          onClick={handleManualLocation}
+        >
+          Submit
+        </button>
+      </div>
+    );
+  }
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Nearby Lost & Found Posts</h1>
+        <button
+          className="bg-green-500 text-white px-4 py-2 rounded"
+          onClick={() => router.push("/posts/create")}
+        >
+          + Create Post
+        </button>
+      </div>
+
+      {posts.length === 0 ? (
+        <p className="text-gray-500">No posts found near your location.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {posts.map((post) => (
+            <div
+              key={post._id}
+              className="border p-4 rounded shadow hover:shadow-lg transition"
+            >
+              {post.imageUrl && (
+                <img
+                  src={post.imageUrl}
+                  alt={post.title}
+                  className="w-full h-48 object-cover rounded mb-2"
+                />
+              )}
+              <p className="text-sm text-gray-500">{post.category.toUpperCase()}</p>
+              <h2 className="text-xl font-semibold">{post.title}</h2>
+              <p className="text-gray-700">{post.description}</p>
+              {post.location.name && (
+                <p className="text-gray-400 mt-1 text-sm">Location: {post.location.name}</p>
+              )}
+              <p className="mt-2 text-sm font-medium">
+                Status: {post.type === "lost" ? "Lost" : "Found"}
+              </p>
+            </div>
+          ))}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
     </div>
   );
 }
